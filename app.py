@@ -44,27 +44,129 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    :root { --brand:#155eef; --ink:#172b4d; --muted:#5d6b82; }
-    .block-container { max-width: 1180px; padding-top: 1rem; padding-bottom: 3rem; }
-    h1, h2, h3 { color: var(--ink); letter-spacing: -0.025em; }
-    div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #ffffff 0%, #f7f9fc 100%);
-        border: 1px solid #e4e9f2; border-radius: 14px; padding: 14px 16px;
-        box-shadow: 0 3px 14px rgba(23,43,77,.05);
+    :root {
+        --kvh-brand: #175cd3;
+        --kvh-brand-soft: #eff6ff;
+        --kvh-text: #101828;
+        --kvh-muted: #475467;
+        --kvh-surface: #ffffff;
+        --kvh-surface-2: #f8fafc;
+        --kvh-border: #dbe3ef;
+        --kvh-shadow: 0 16px 40px rgba(16, 24, 40, .08);
     }
-    div[data-testid="stMetricLabel"] { color: var(--muted); }
-    div[data-testid="stMetricValue"] { color: var(--ink); font-size: 1.55rem; }
-    .hero { padding: 1rem 1.25rem; border: 1px solid #dbe5ff; border-radius: 18px;
-        background: linear-gradient(135deg,#f5f8ff 0%,#fff 70%); margin-bottom: .55rem; }
-    .hero-kicker { color: var(--brand); font-weight: 700; font-size:.82rem; letter-spacing:.08em; }
-    .hero p { color:var(--muted); margin:.4rem 0 0; max-width:820px; }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --kvh-brand: #84adff;
+            --kvh-brand-soft: #172554;
+            --kvh-text: #f8fafc;
+            --kvh-muted: #cbd5e1;
+            --kvh-surface: #111827;
+            --kvh-surface-2: #182231;
+            --kvh-border: #334155;
+            --kvh-shadow: 0 18px 50px rgba(0, 0, 0, .28);
+        }
+    }
+    .block-container {
+        max-width: 1180px;
+        padding-top: 2.75rem;
+        padding-bottom: 3rem;
+    }
+    h1, h2, h3 { letter-spacing: -0.025em; }
+    div[data-testid="stMetric"] {
+        background: var(--kvh-surface-2);
+        border: 1px solid var(--kvh-border);
+        border-radius: 14px;
+        padding: 14px 16px;
+        box-shadow: 0 3px 14px rgba(15, 23, 42, .05);
+    }
+    div[data-testid="stMetricLabel"] { color: var(--kvh-muted); }
+    div[data-testid="stMetricValue"] { color: var(--kvh-text); font-size: 1.55rem; }
+    .kvh-hero {
+        position: relative;
+        overflow: hidden;
+        padding: clamp(1.35rem, 4vw, 2.75rem);
+        border: 1px solid var(--kvh-border);
+        border-radius: 24px;
+        background: var(--kvh-surface);
+        box-shadow: var(--kvh-shadow);
+        color: var(--kvh-text);
+        margin-bottom: 1rem;
+    }
+    .kvh-hero::after {
+        content: "";
+        position: absolute;
+        width: 260px; height: 260px;
+        right: -100px; top: -130px;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--kvh-brand) 14%, transparent);
+        pointer-events: none;
+    }
+    .kvh-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        padding: .35rem .65rem;
+        border-radius: 999px;
+        background: var(--kvh-brand-soft);
+        color: var(--kvh-brand);
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+    .kvh-hero h1 {
+        color: var(--kvh-text) !important;
+        font-size: clamp(2.15rem, 7vw, 4.25rem) !important;
+        line-height: 1.02 !important;
+        max-width: 820px;
+        margin: 1rem 0 .8rem !important;
+        letter-spacing: -.055em;
+    }
+    .kvh-lead {
+        color: var(--kvh-muted);
+        font-size: clamp(1rem, 2.3vw, 1.2rem);
+        line-height: 1.6;
+        max-width: 790px;
+        margin: 0;
+    }
+    .kvh-principles {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .7rem;
+        margin-top: 1.35rem;
+    }
+    .kvh-principle {
+        border-top: 1px solid var(--kvh-border);
+        padding-top: .85rem;
+        color: var(--kvh-muted);
+        font-size: .88rem;
+        line-height: 1.45;
+    }
+    .kvh-principle strong {
+        display: block;
+        color: var(--kvh-text);
+        font-size: .92rem;
+        margin-bottom: .15rem;
+    }
+    .kvh-intro-note {
+        display: flex;
+        align-items: flex-start;
+        gap: .55rem;
+        color: var(--kvh-muted);
+        font-size: .82rem;
+        line-height: 1.5;
+        margin: .75rem .15rem 1rem;
+    }
     @media (max-width: 640px) {
-        .block-container { padding: .55rem .7rem 2rem; }
-        h1 { font-size: 1.8rem !important; }
-        .hero { padding: .8rem .9rem; border-radius: 14px; }
+        .block-container { padding: 3.25rem .75rem 2rem; }
+        .kvh-hero { border-radius: 18px; padding: 1.25rem 1.05rem; }
+        .kvh-hero h1 { font-size: 2.25rem !important; margin-top: .8rem !important; }
+        .kvh-lead { font-size: .98rem; line-height: 1.55; }
+        .kvh-principles { grid-template-columns: 1fr; gap: .55rem; margin-top: 1rem; }
+        .kvh-principle { padding-top: .65rem; }
         div[data-testid="stMetric"] { padding: 11px 12px; }
         div[data-testid="stMetricValue"] { font-size: 1.25rem; }
-        div[data-testid="stPlotlyChart"] { margin-left:-.5rem; margin-right:-.5rem; }
+        div[data-testid="stPlotlyChart"] { margin-left: -.5rem; margin-right: -.5rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -84,14 +186,35 @@ AANNAMES = {
 
 # ---------------------------------------------------------------------------
 st.markdown("""
-<div class="hero">
-  <div class="hero-kicker">NEDERLAND · VERMOGENSSIMULATIE 2026</div>
-  <h1 style="margin:.2rem 0 0">Kopen of huren?</h1>
-  <p>Vergelijk het netto vermogen bij een gelijk startvermogen en maandbudget.
-  Inclusief hypotheek, onderhoud, transactiekosten, Box 1 en Box 3.</p>
+<section class="kvh-hero">
+  <div class="kvh-eyebrow">Nederland · modeljaar 2026</div>
+  <h1>Wat levert kopen of huren je écht op?</h1>
+  <p class="kvh-lead">
+    Niet alleen maandlasten vergelijken, maar je volledige vermogensontwikkeling.
+    Vul je woning, hypotheek, huur en verwachtingen in en zie welk scenario na
+    jouw gekozen periode financieel sterker uitkomt.
+  </p>
+  <div class="kvh-principles">
+    <div class="kvh-principle">
+      <strong>Dezelfde uitgangspositie</strong>
+      Kopen en huren starten met hetzelfde vermogen en maandbudget.
+    </div>
+    <div class="kvh-principle">
+      <strong>Alle relevante geldstromen</strong>
+      Inclusief aflossing, onderhoud, transactiekosten, beleggen en belasting.
+    </div>
+    <div class="kvh-principle">
+      <strong>Een antwoord voor jouw horizon</strong>
+      Vergelijk netto vermogen, break-even en gevoeligheid van de aannames.
+    </div>
+  </div>
+</section>
+<div class="kvh-intro-note">
+  <span>ⓘ</span>
+  <span>Indicatieve scenarioanalyse, geen persoonlijk financieel of fiscaal advies.
+  Open hieronder de parameters en vervang de voorbeeldwaarden door je eigen situatie.</span>
 </div>
 """, unsafe_allow_html=True)
-st.caption("Indicatief rekenmodel — geen financieel of fiscaal advies. Open Parameters om je eigen situatie in te vullen.")
 
 # ===========================================================================
 # PARAMETERS
