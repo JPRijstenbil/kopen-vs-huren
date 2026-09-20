@@ -1,3 +1,4 @@
+# Dependency manifest — update marker 2026-09-20 forces a clean Streamlit Cloud rebuild.
 streamlit==1.64.0
 pandas==3.0.6
 numpy==2.4.6
