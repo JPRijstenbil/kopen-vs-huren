@@ -33,10 +33,41 @@ from simulator.plotting import (
     tornado_figuur,
 )
 from simulator.presets import format_export, parse_import, waarden_naar_session
-from simulator.scenarios import EIGENWONING, _variant
 from simulator.tax import Box3Regels, Box3Stelsel, EigenWoningFiscaal
 
-st.set_page_config(page_title="Kopen vs Huren — NL", layout="wide")
+st.set_page_config(
+    page_title="Kopen vs Huren — Nederland",
+    page_icon="🏠",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+st.markdown("""
+<style>
+    :root { --brand:#155eef; --ink:#172b4d; --muted:#5d6b82; }
+    .block-container { max-width: 1180px; padding-top: 1rem; padding-bottom: 3rem; }
+    h1, h2, h3 { color: var(--ink); letter-spacing: -0.025em; }
+    div[data-testid="stMetric"] {
+        background: linear-gradient(145deg, #ffffff 0%, #f7f9fc 100%);
+        border: 1px solid #e4e9f2; border-radius: 14px; padding: 14px 16px;
+        box-shadow: 0 3px 14px rgba(23,43,77,.05);
+    }
+    div[data-testid="stMetricLabel"] { color: var(--muted); }
+    div[data-testid="stMetricValue"] { color: var(--ink); font-size: 1.55rem; }
+    .hero { padding: 1rem 1.25rem; border: 1px solid #dbe5ff; border-radius: 18px;
+        background: linear-gradient(135deg,#f5f8ff 0%,#fff 70%); margin-bottom: .55rem; }
+    .hero-kicker { color: var(--brand); font-weight: 700; font-size:.82rem; letter-spacing:.08em; }
+    .hero p { color:var(--muted); margin:.4rem 0 0; max-width:820px; }
+    @media (max-width: 640px) {
+        .block-container { padding: .55rem .7rem 2rem; }
+        h1 { font-size: 1.8rem !important; }
+        .hero { padding: .8rem .9rem; border-radius: 14px; }
+        div[data-testid="stMetric"] { padding: 11px 12px; }
+        div[data-testid="stMetricValue"] { font-size: 1.25rem; }
+        div[data-testid="stPlotlyChart"] { margin-left:-.5rem; margin-right:-.5rem; }
+    }
+</style>
+""", unsafe_allow_html=True)
 
 
 def geld(x: float) -> str:
@@ -52,12 +83,15 @@ AANNAMES = {
 }
 
 # ---------------------------------------------------------------------------
-st.title("🏠 Kopen vs Huren — vermogenssimulatie (NL)")
-st.markdown(
-    "Eerlijke maandelijkse vermogens- en cashflowsimulatie. Beide scenario's starten met "
-    "hetzelfde vermogen en maandbudget; alles dat overblijft wordt belegd.  \n"
-    "*Houd over elk veld en klik op het \"?\"-icoon om de uitleg te zien.*"
-)
+st.markdown("""
+<div class="hero">
+  <div class="hero-kicker">NEDERLAND · VERMOGENSSIMULATIE 2026</div>
+  <h1 style="margin:.2rem 0 0">Kopen of huren?</h1>
+  <p>Vergelijk het netto vermogen bij een gelijk startvermogen en maandbudget.
+  Inclusief hypotheek, onderhoud, transactiekosten, Box 1 en Box 3.</p>
+</div>
+""", unsafe_allow_html=True)
+st.caption("Indicatief rekenmodel — geen financieel of fiscaal advies. Open Parameters om je eigen situatie in te vullen.")
 
 # ===========================================================================
 # PARAMETERS
@@ -82,8 +116,8 @@ with st.expander("⚙️ Parameters — pas aan naar wens", expanded=False):
                     "Woningwaardestijging (%/jr)", 0.0, 10.0, 4.0, 0.1, key="waarde_stijging",
                     help="Verwachte jaarlijkse stijging van de marktwaarde van je woning. Deze waardestijging is in Nederland onbelast (groot voordeel van kopen)."),
                 "beleg": c2.slider(
-                    "Beleggingsrendement bruto (%/jr)", 0.0, 12.0, 6.0, 0.1, key="beleg_rendement",
-                    help="Verwacht jaarlijks bruto rendement op je beleggingen, vóór beleggingskosten (TER) en vóór Box 3-belasting."),
+                    "Koersrendement beleggingen (%/jr)", -10.0, 15.0, 6.0, 0.1, key="beleg_rendement",
+                    help="Verwachte jaarlijkse koersstijging vóór TER en Box 3. Dividend stel je apart in."),
                 "huur": c2.slider(
                     "Huurverhoging (%/jr)", 0.0, 8.0, 3.0, 0.1, key="huur_verhoging",
                     help="Jaarlijkse stijging van de huurprijs. Huur loopt op, terwijl een hypotheeklast vastelast/afnemend is."),
@@ -150,7 +184,7 @@ with st.expander("⚙️ Parameters — pas aan naar wens", expanded=False):
             help="Belasting bij aankoop: 2% voor bewoners, 0% starters, 10,4% belegger of tweede woning.")
         p_starter = k3.checkbox(
             "Startersvrijstelling (0%)", False, key="startersvrijstelling",
-            help="Zet aan voor 0% overdrachtsbelasting (starters onder 35 jaar tot een waarde-limiet).")
+            help="2026: eenmalig, 18 t/m 34 jaar, zelf bewonen en woningwaarde maximaal €555.000.")
         p_not_levering = k3.number_input(
             "Notaris levering (€)", 0.0, 5000.0, 750.0, 50.0, key="notaris_levering",
             help="Kosten van de transportakte (eigendomsoverdracht).")
@@ -171,7 +205,7 @@ with st.expander("⚙️ Parameters — pas aan naar wens", expanded=False):
             help="Kosten van een aankoopmakelaar (optioneel).")
         p_nhg = k3.slider(
             "NHG-premie (%)", 0.0, 1.5, 0.0, 0.1, key="nhg",
-            help="Eenmalige Nationale Hypotheek Garantie-premie, als % van het hypotheekbedrag.")
+            help="2026: 0,4% borgtochtprovisie; NHG-grens €470.000 (zonder extra verduurzamingsruimte).")
 
         k4, k5 = st.columns(2)
         st.markdown("**Lopende eigenaarskosten**")
@@ -231,36 +265,39 @@ with st.expander("⚙️ Parameters — pas aan naar wens", expanded=False):
         p_dividend = b1.slider(
             "Dividendrendement (%/jr)", 0.0, 5.0, 0.0, 0.1, key="dividend",
             help="Verwacht jaarlijks dividend / uitkering op je beleggingen (naast het koersrendement).")
+        p_spaarrente = b1.slider(
+            "Spaarrente (%/jr)", 0.0, 6.0, 1.5, 0.1, key="spaarrente",
+            help="Rente op het deel dat als spaargeld/cash wordt aangehouden.")
         p_ter = b1.slider(
             "Beleggingskosten / TER (%)", 0.0, 2.0, 0.3, 0.05, key="ter",
             help="Total Expense Ratio: jaarlijkse kosten van het fonds/ETF, als % van je belegde vermogen.")
         p_hra_tarief = b2.slider(
-            "HRA-tarief (marginaal, %)", 20.0, 60.0, 37.0, 0.5, key="hra_tarief",
-            help="Effectief marginaal tarief waartegen je de hypotheekrente aftrekt (~37-38% tweede schijf, ~49-50% derde schijf).")
+            "HRA-tarief (effectief, %)", 20.0, 50.0, 37.56, 0.01, key="hra_tarief",
+            help="In 2026 is de aftrek voor hoge inkomens gemaximeerd op 37,56%; het werkelijke effect hangt af van inkomen.")
         p_ewf = b2.slider(
             "Eigenwoningforfait (% van WOZ)", 0.0, 1.5, 0.35, 0.01, key="ewf",
             help="Eigenwoningforfait: een bijtelling (inkomen) op je woning. ~0.35% van WOZ voor gewone woningen; hoger boven een WOZ-drempel.")
         p_wet_hillen = b2.slider(
-            "Wet Hillen afbouwfactor (1=van kracht)", 0.0, 1.0, 0.77, 0.01, key="wet_hillen",
-            help="Dempt de belasting wanneer het EWF boven je rente-aftrek uitstijgt. 1 = volledig van kracht (EWF-rest onbelast), 0 = volledig afgebouwd (na 2048).")
+            "Wet Hillen-factor in startjaar", 0.0, 1.0, 0.71867, 0.001, key="wet_hillen",
+            help="In 2026 resteert 71,867% aftrek. Het model verlaagt deze factor daarna jaarlijks met 4,8 procentpunt.")
         p_b3_tarief = b3.slider(
             "Box 3 tarief (%)", 0.0, 50.0, 36.0, 1.0, key="b3_tarief",
             help="Belastingtarief in Box 3 (sparen & beleggen), geheven over het (fictieve) rendement.")
         p_b3_spaar = b3.slider(
-            "Spaarforfait (%)", 0.0, 5.0, 1.44, 0.01, key="b3_spaar",
-            help="Forfaitair rendement dat de fiscus op spaargeld veronderstelt (Box 3, fictief systeem).")
+            "Spaarforfait (%)", 0.0, 5.0, 1.28, 0.01, key="b3_spaar",
+            help="Voorlopig forfait banktegoeden 2026: 1,28%; definitief begin 2027.")
         p_b3_beleg = b3.slider(
-            "Beleggingsforfait (%)", 0.0, 10.0, 6.27, 0.01, key="b3_beleg",
-            help="Forfaitair rendement dat de fiscus op beleggingen veronderstelt (Box 3, fictief systeem).")
+            "Beleggingsforfait (%)", 0.0, 10.0, 6.00, 0.01, key="b3_beleg",
+            help="Vast forfait beleggingen en overige bezittingen in 2026: 6,00%.")
         p_b3_vrij = b3.number_input(
-            "Heffingsvrij vermogen (€/persoon)", 0.0, 300000.0, 57684.0, 1000.0, key="b3_heffingsvrij",
+            "Heffingsvrij vermogen (€/persoon)", 0.0, 300000.0, 59357.0, 100.0, key="b3_heffingsvrij",
             help="Vrijgesteld vermogen per persoon in Box 3, vóór dit belast wordt.")
         p_b3_partner = b3.checkbox(
             "Fiscaal partner (2x heffingsvrij)", False, key="b3_partner",
             help="Met een fiscaal partner wordt het heffingsvrije vermogen verdubbeld.")
         p_b3_werkelijk = b3.checkbox(
-            "Gebruik werkelijk rendement (i.p.v. fictief)", False, key="b3_werkelijk",
-            help="Belast op werkelijk behaald rendement (incl. ongerealiseerde koerswinst) in plaats van het fictieve forfait.")
+            "Pas tegenbewijs toe indien gunstiger", True, key="b3_werkelijk",
+            help="Gebruikt jaarlijks de laagste heffing van fictief en werkelijk rendement. Bij werkelijk rendement geldt geen vrijstelling of verliesverrekening tussen jaren.")
 
     # ---- Algemeen ----
     with tab_g:
@@ -315,7 +352,7 @@ def _huidige_waarden() -> dict:
         "verkoop_overig": p_verkoop_overig,
         "huur": p_huur, "service": p_service,
         "service_stijging": p_service_stijging, "huur_overig": p_huur_overig,
-        "dividend": p_dividend, "ter": p_ter, "hra_tarief": p_hra_tarief,
+        "dividend": p_dividend, "spaarrente": p_spaarrente, "ter": p_ter, "hra_tarief": p_hra_tarief,
         "ewf": p_ewf, "wet_hillen": p_wet_hillen,
         "b3_tarief": p_b3_tarief, "b3_spaar": p_b3_spaar, "b3_beleg": p_b3_beleg,
         "b3_heffingsvrij": p_b3_vrij, "b3_partner": p_b3_partner,
@@ -397,7 +434,7 @@ scenario = Scenario(
         aankoopmakelaar=p_makelaar_koop,
         nhg_premie_pct=p_nhg,
         overige=0.0,
-        fiscaal_aftrekbaar_deel_pct=0.0,
+        fiscaal_aftrekbaar_deel_pct=100.0,
     ),
     eigenaarskosten=Eigenaarskosten(
         onderhoud_pct_waarde=p_onderhoud_pct,
@@ -427,12 +464,20 @@ scenario = Scenario(
         koersrendement_pct=None,
         dividend_pct=p_dividend,
         ter_pct=p_ter,
+        spaarrente_pct=p_spaarrente,
     ),
     fiscaal=FiscaleConfig(
         eigenwoning=EigenWoningFiscaal(
             hra_tarief_pct=p_hra_tarief,
-            ewf_schijven=[(0.0, p_ewf)],
+            ewf_schijven=[
+                (0.0, 0.0), (12_500.0, 0.10), (25_000.0, 0.20),
+                (50_000.0, 0.25), (75_000.0, p_ewf),
+            ],
+            ewf_hoge_grens=1_350_000.0,
+            ewf_hoog_pct=2.35,
             wet_hillen_afbouw_pct=p_wet_hillen,
+            wet_hillen_basisjaar=p_startjaar,
+            wet_hillen_afbouw_per_jaar=0.048,
         ),
         box3=Box3Stelsel([
             Box3Regels(
@@ -471,10 +516,18 @@ aankoop_indic = p_koopprijs * (0.0 if p_starter else p_odt / 100.0) + p_not_leve
 start_vermogen = p_spaar + p_beleg_start
 if p_inbreng + aankoop_indic > start_vermogen:
     st.warning(
-        f"⚠️ Eigen inbreng (€{geld(p_inbreng)}) + aankoopkosten (~€{geld(aankoop_indic)}) "
-        f"overschrijden je startvermogen (€{geld(start_vermogen)}). Het tekort wordt afgekapt — "
-        f"verlaag de eigen inbreng of verhoog het startvermogen."
+        f"⚠️ Eigen inbreng ({geld(p_inbreng)}) + aankoopkosten (~{geld(aankoop_indic)}) "
+        f"overschrijden je startvermogen ({geld(start_vermogen)}). Het tekort blijft als negatief "
+        f"liquide saldo zichtbaar; verlaag de inbreng of verhoog het startvermogen voor een haalbaar scenario."
     )
+if p_starter and p_koopprijs > 555_000:
+    st.error("Startersvrijstelling 2026 is niet geldig boven een woningwaarde van €555.000.")
+if p_hra and afl_type == Aflossingstype.AFLOSSINGSVRIJ:
+    st.warning("Een nieuw aflossingsvrij leningdeel geeft normaal geen HRA. Laat dit alleen aan bij overgangsrecht van een bestaande schuld.")
+if p_hra and (p_looptijd > 30 or afl_type == Aflossingstype.AFLOSSINGSVRIJ):
+    st.warning("Voor een nieuwe eigenwoningschuld vanaf 2013 vereist HRA minimaal annuïtair/lineair aflossen binnen 30 jaar.")
+if p_nhg > 0 and p_koopprijs > 470_000:
+    st.warning("De standaard NHG-kostengrens is in 2026 €470.000; met energiebesparende voorzieningen kan een hogere grens gelden.")
 
 # ===========================================================================
 # Simuleren
@@ -488,8 +541,7 @@ jaar_labels = np.array(
     [scenario.algemeen.start_jaar + i // 12 for i in range(0, len(resultaat.maanden), 12)]
 )
 
-st.divider()
-st.subheader(f"📊 Resultaat na {p_vergelijk} jaar")
+st.caption(f"RESULTAAT NA {p_vergelijk} JAAR")
 
 netto_k = resultaat.netto_kopen_liquide[limit - 1] if liquide else resultaat.netto_kopen_bezit[limit - 1]
 netto_h = resultaat.netto_huren[limit - 1]
@@ -501,13 +553,16 @@ else:
     netto_k_v, netto_h_v = netto_k, netto_h
 diff = netto_k_v - netto_h_v
 
-kol = st.columns(6)
+winnaar = "Kopen" if diff > 0 else "Huren" if diff < 0 else "Gelijk"
+st.markdown(f"### {winnaar} ligt na {p_vergelijk} jaar **{geld(abs(diff))}** voor")
+kol = st.columns(3)
 kol[0].metric("Netto vermogen · kopen", geld(netto_k_v))
 kol[1].metric("Netto vermogen · huren", geld(netto_h_v))
 kol[2].metric("Verschil kopen − huren", geld(diff))
-kol[3].metric("Break-even", f"jaar {breakeven:g}" if breakeven is not None else "nooit binnen horizon")
-kol[4].metric("Woning-equity", geld(resultaat.equity[limit - 1]))
-kol[5].metric("Resterende hypotheek", geld(resultaat.schuld[limit - 1]))
+kol2 = st.columns(3)
+kol2[0].metric("Break-even", f"na {breakeven:g} jaar" if breakeven is not None else "niet binnen horizon")
+kol2[1].metric("Woning-equity", geld(resultaat.equity[limit - 1]))
+kol2[2].metric("Resterende hypotheek", geld(resultaat.schuld[limit - 1]))
 st.markdown(
     f"Beleggingen: kopen **{geld(resultaat.belegging_kopen[limit-1])}** · "
     f"huren **{geld(resultaat.belegging_huren[limit-1])}**."
@@ -525,13 +580,21 @@ with c2:
     st.plotly_chart(fig_h, width="stretch")
 
 with st.expander("🔀 Scenario-vergelijking (pessimistisch / basis / optimistisch)", expanded=False):
-    scen_lijst = [
-        _variant("Pessimistisch", 2.0, 4.0, 4.5, 5.4, 6.0, 2.5),
-        _variant("Basis", 4.0, 6.0, 3.0, 4.2, 5.0, 2.0),
-        _variant("Optimistisch", 6.0, 8.0, 1.5, 3.5, 4.0, 1.5),
+    varianten = [
+        ("Pessimistisch", 2.0, 4.0, 4.5, 5.4, 6.0, 2.5),
+        ("Basis", 4.0, 6.0, 3.0, 4.2, 5.0, 2.0),
+        ("Optimistisch", 6.0, 8.0, 1.5, 3.5, 4.0, 1.5),
     ]
     fig_sc = go.Figure()
-    for sc in scen_lijst:
+    for naam, waarde, beleg, huur_groei, rente, rente_na, inflatie_pct in varianten:
+        sc = copy.deepcopy(scenario)
+        sc.naam = naam
+        sc.woning.waarde_groei_pct = waarde
+        sc.belegging.bruto_rendement_pct = beleg
+        sc.huur.huurverhoging_pct = huur_groei
+        sc.leningdelen[0].rente_pct = rente
+        sc.leningdelen[0].rente_na_rentevast_pct = rente_na
+        sc.algemeen.inflatie_pct = inflatie_pct
         r = simuleer(sc)
         k = r.netto_kopen_liquide if liquide else r.netto_kopen_bezit
         j = r.jaar_indices()

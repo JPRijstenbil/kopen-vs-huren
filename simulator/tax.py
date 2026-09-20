@@ -42,7 +42,11 @@ class EigenWoningFiscaal:
     ewf_schijven: list[tuple[float, float]] = field(
         default_factory=lambda: [(0.0, 0.35)]
     )
+    ewf_hoge_grens: float | None = None
+    ewf_hoog_pct: float = 2.35
     wet_hillen_afbouw_pct: float = 1.0
+    wet_hillen_basisjaar: int = 2026
+    wet_hillen_afbouw_per_jaar: float = 0.048
 
     def ewf_percentage(self, woz_waarde: float) -> float:
         """EWF-percentage passend bij de WOZ-waarde (laatste schijf die geldt)."""
@@ -52,23 +56,41 @@ class EigenWoningFiscaal:
                 pct = p
         return pct
 
+    def ewf_bedrag(self, woz_waarde: float) -> float:
+        """Eigenwoningforfait in euro's, inclusief correcte villabelasting."""
+        basiswaarde = min(woz_waarde, self.ewf_hoge_grens or woz_waarde)
+        basis_pct = self.ewf_percentage(basiswaarde)
+        if self.ewf_hoge_grens is None or woz_waarde <= self.ewf_hoge_grens:
+            return woz_waarde * basis_pct / 100.0
+        return (
+            self.ewf_hoge_grens * basis_pct / 100.0
+            + (woz_waarde - self.ewf_hoge_grens) * self.ewf_hoog_pct / 100.0
+        )
+
+    def wet_hillen_factor(self, jaar: int | None) -> float:
+        if jaar is None:
+            return self.wet_hillen_afbouw_pct
+        verstreken = max(jaar - self.wet_hillen_basisjaar, 0)
+        return max(self.wet_hillen_afbouw_pct - verstreken * self.wet_hillen_afbouw_per_jaar, 0.0)
+
 
 def hra_ewf_jaarvoordeel(
     aftrekbare_rente: float,
     woz_waarde: float,
     fiscaal: EigenWoningFiscaal,
+    jaar: int | None = None,
 ) -> float:
     """Netto jaarlijks belastingvoordeel uit eigen woning (positief = voordeel).
 
     - pos voordeel = netto renteaftrek (rente > EWF)
     - negatief = netto bijtelling (EWF > rente), gedempt door Wet Hillen.
     """
-    ewf = woz_waarde * fiscaal.ewf_percentage(woz_waarde) / 100.0
+    ewf = fiscaal.ewf_bedrag(woz_waarde)
     tarief = fiscaal.hra_tarief_pct / 100.0
     voordeel = (aftrekbare_rente - ewf) * tarief
     if aftrekbare_rente < ewf:
         # Wet Hillen: de EWF-'rest' boven de rente wordt niet (of deels) belast
-        voordeel += (ewf - aftrekbare_rente) * tarief * fiscaal.wet_hillen_afbouw_pct
+        voordeel += (ewf - aftrekbare_rente) * tarief * fiscaal.wet_hillen_factor(jaar)
     return voordeel
 
 
@@ -120,8 +142,8 @@ def box3_fictief_belasting(
 ) -> float:
     """Belasting (in euro's) onder het fictieve-rendement-systeem.
 
-    De heffingsvrije voet wordt eerst van het spaargeld afgetrokken, daarna
-    van de beleggingen (fiscaal het voordeligst).
+    Het heffingsvrije vermogen verlaagt de grondslag pro rata, conform de
+    Overbruggingswet box 3.
     """
     if totaal_vermogen <= 0:
         return 0.0
@@ -129,34 +151,28 @@ def box3_fictief_belasting(
     if belastbaar <= 0:
         return 0.0
 
-    spaar = min(spaar_deel, belastbaar)
-    belegging = belastbaar - spaar
-
-    rendement = (
-        spaar * (regels.spaarforfait_pct / 100.0)
-        + belegging * (regels.beleggingsforfait_pct / 100.0)
+    spaar = min(max(spaar_deel, 0.0), totaal_vermogen)
+    belegging = max(totaal_vermogen - spaar, 0.0)
+    forfaitair_rendement = (
+        spaar * regels.spaarforfait_pct / 100.0
+        + belegging * regels.beleggingsforfait_pct / 100.0
     )
-    return rendement * (regels.tarief_pct / 100.0)
+    return forfaitair_rendement * (belastbaar / totaal_vermogen) * regels.tarief_pct / 100.0
 
 
 def box3_werkelijk_belasting(
     werkelijk_rendement: float,
     regels: Box3Regels,
-    verrekenbaar_verlies: float = 0.0,
-) -> tuple[float, float]:
+) -> float:
     """Belasting onder het werkelijk-rendement-systeem.
 
     Werkelijk rendement = koerswinst + dividend - kosten over het jaar
     (inclusief ongerealiseerde waardeveranderingen).
 
-    Retourneert (belasting, nieuw_verrekenbaar_verlies). Bij een verlies wordt
-    geen belasting geheven en het verlies wordt meegenomen naar het volgende
-    jaar (gesimplificeerde verliesverrekening).
+    Onder de tegenbewijsregeling is er geen heffingsvrij vermogen en geen
+    jaaroverschrijdende verliesverrekening.
     """
-    rendement = werkelijk_rendement - verrekenbaar_verlies
-    if rendement <= 0:
-        return 0.0, -rendement  # verlies doorzetten
-    return rendement * (regels.tarief_pct / 100.0), 0.0
+    return max(werkelijk_rendement, 0.0) * regels.tarief_pct / 100.0
 
 
 # ---------------------------------------------------------------------------

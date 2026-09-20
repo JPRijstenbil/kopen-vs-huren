@@ -25,15 +25,22 @@ from .tax import Box3Regels, Box3Stelsel, EigenWoningFiscaal
 # Indicatieve Box 3 forfaits per kalenderjaar (controleer actuele waarden)
 BOX3_REGELS = Box3Stelsel([
     Box3Regels(2024, 2024, 36.0, 1.03, 6.04, 57000.0),
-    Box3Regels(2025, 2025, 36.0, 1.44, 6.27, 57684.0),
-    Box3Regels(2026, None, 36.0, 1.44, 6.27, 57684.0),
+    Box3Regels(2025, 2025, 36.0, 1.37, 5.88, 57684.0),
+    Box3Regels(2026, None, 36.0, 1.28, 6.00, 59357.0),
 ])
 
 # Eigen woning (Box 1): HRA-tarief, EWF-schijven (WOZ), Wet Hillen-afbouw 2026
 EIGENWONING = EigenWoningFiscaal(
     hra_tarief_pct=37.0,
-    ewf_schijven=[(0.0, 0.35), (1310000.0, 1.30)],
-    wet_hillen_afbouw_pct=0.77,
+    ewf_schijven=[
+        (0.0, 0.0), (12_500.0, 0.10), (25_000.0, 0.20),
+        (50_000.0, 0.25), (75_000.0, 0.35),
+    ],
+    ewf_hoge_grens=1350000.0,
+    ewf_hoog_pct=2.35,
+    wet_hillen_afbouw_pct=0.71867,
+    wet_hillen_basisjaar=2026,
+    wet_hillen_afbouw_per_jaar=0.048,
 )
 
 
@@ -97,7 +104,7 @@ def basis_scenario(
             aankoopmakelaar=0.0,
             nhg_premie_pct=0.0,
             overige=0.0,
-            fiscaal_aftrekbaar_deel_pct=0.0,
+            fiscaal_aftrekbaar_deel_pct=100.0,
         ),
         eigenaarskosten=Eigenaarskosten(
             onderhoud_pct_waarde=1.0,
@@ -127,6 +134,7 @@ def basis_scenario(
             koersrendement_pct=None,
             dividend_pct=0.0,
             ter_pct=0.3,
+            spaarrente_pct=1.5,
         ),
         fiscaal=_fiscaal(),
         algemeen=_algemeen(inflatie_pct=inflatie),

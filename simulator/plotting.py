@@ -7,11 +7,11 @@ import plotly.express as px
 
 from .engine import Resultaat
 
-BLUE = "#1f77b4"
-ORANGE = "#ff7f0e"
-GREEN = "#2ca02c"
-RED = "#d62728"
-GRIJS = "#7f7f7f"
+BLUE = "#155eef"
+ORANGE = "#f79009"
+GREEN = "#039855"
+RED = "#d92d20"
+GRIJS = "#667085"
 
 
 def _leeg() -> go.Figure:
@@ -22,7 +22,7 @@ def _basis_layout(fig: go.Figure, titel: str, ylabel: str = "") -> go.Figure:
     fig.update_layout(
         title=titel,
         template="plotly_white",
-        height=420,
+        height=390,
         margin=dict(l=10, r=10, t=50, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
         hovermode="x unified",
@@ -58,11 +58,11 @@ def net_vermogen_figuur(
     fig.add_trace(go.Scatter(x=x, y=k, name="Kopen", line=dict(color=BLUE, width=3),
                              mode="lines"))
     # vergelijkingshorizon (op kalenderjaar-schaal)
-    vergelijk_jaar_cal = float(x[0]) + float(vergelijk_jaar)
+    vergelijk_jaar_cal = float(x[0]) + float(vergelijk_jaar) - 1.0
     fig.add_vline(x=vergelijk_jaar_cal, line_dash="dot", line_color=GRIJS, opacity=0.7)
     # break-even punt (op kalenderjaar-schaal, niet jaar-index)
     if breakeven is not None:
-        breakeven_jaar = float(x[0]) + float(breakeven)
+        breakeven_jaar = float(x[0]) + float(breakeven) - 1.0
         if x[0] <= breakeven_jaar <= x[-1]:
             i = int(np.argmin(np.abs(x - breakeven_jaar)))
             fig.add_trace(go.Scatter(
@@ -73,7 +73,7 @@ def net_vermogen_figuur(
             ))
     fig.update_layout(
         title="Netto vermogen door de tijd",
-        template="plotly_white", height=440,
+        template="plotly_white", height=420,
         margin=dict(l=10, r=10, t=50, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
         hovermode="x unified",
@@ -81,6 +81,7 @@ def net_vermogen_figuur(
     fig.update_yaxes(title="Netto vermogen (€)" if not in_vandaag else "Netto vermogen (€ van vandaag)",
                      tickformat=",.0f")
     fig.update_xaxes(title="Jaar")
+    fig.update_layout(font=dict(family="Inter, Arial, sans-serif", color="#344054"))
     return fig
 
 

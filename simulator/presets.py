@@ -62,6 +62,7 @@ SCHEMA: list[tuple[str, str, str]] = [
     ("huur_overig", "Overige huurderskosten (€/mnd)", "float"),
     # --- Beleggen & fiscaal ---
     ("dividend", "Dividendrendement (%/jr)", "float"),
+    ("spaarrente", "Spaarrente (%/jr)", "float"),
     ("ter", "Beleggingskosten / TER (%)", "float"),
     ("hra_tarief", "HRA-tarief (marginaal, %)", "float"),
     ("ewf", "Eigenwoningforfait (% van WOZ)", "float"),
@@ -147,7 +148,7 @@ def _group_for(key: str) -> str:
         return GROUPEN[5]  # Verkoop
     if idx < 39:
         return GROUPEN[6]  # Huren
-    if idx < 51:
+    if idx < 52:
         return GROUPEN[7]  # Beleggen & fiscaal
     return GROUPEN[8]  # Algemeen
 

@@ -31,8 +31,17 @@ from .tax import box3_fictief_belasting, box3_werkelijk_belasting, hra_ewf_jaarv
 
 def _build_beleggingsrekening(cfg: BeleggingsConfig) -> Beleggingsrekening:
     koers = cfg.koersrendement_pct if cfg.koersrendement_pct is not None else cfg.bruto_rendement_pct
-    dividend = cfg.dividend_pct if cfg.koersrendement_pct is not None else 0.0
+    dividend = cfg.dividend_pct
     return Beleggingsrekening(koers, dividend, cfg.ter_pct)
+
+
+def _dek_tekort_uit_cash(rekening: Beleggingsrekening, cash: float) -> float:
+    """Gebruik eerst beschikbare cash voordat een negatief saldo ontstaat."""
+    if rekening.vermogen < 0.0 and cash > 0.0:
+        opname = min(cash, -rekening.vermogen)
+        cash -= opname
+        rekening.vermogen += opname
+    return cash
 
 
 def _aankoopkosten_totaal(scenario: Scenario, hypotheekbedrag: float) -> float:
@@ -41,7 +50,8 @@ def _aankoopkosten_totaal(scenario: Scenario, hypotheekbedrag: float) -> float:
     overdracht = 0.0 if a.startersvrijstelling else w.koopprijs * a.overdrachtsbelasting_pct / 100.0
     nhg = hypotheekbedrag * a.nhg_premie_pct / 100.0
     transactie = overdracht + a.notaris_levering + a.aankoopmakelaar
-    financiering = a.notaris_hypotheek + a.hypotheekadvies + a.taxatie + a.bouwkundige_keuring + nhg
+    transactie += a.bouwkundige_keuring
+    financiering = a.notaris_hypotheek + a.hypotheekadvies + a.taxatie + nhg
     return transactie + financiering + a.overige, transactie, financiering
 
 
@@ -115,9 +125,7 @@ def simuleer(scenario: Scenario) -> Resultaat:
         cash_k = 0.0
     else:
         cash_k -= uitgaven
-    if begin_k < 0:
-        begin_k = 0.0
-        cash_k = 0.0  # onvoldoende startvermogen; liefst UI-validatie
+    # Een tekort blijft zichtbaar als negatief liquide vermogen; geen gratis afkap.
     belegging_k = _build_beleggingsrekening(scenario.belegging)
     belegging_k.beginwaarde(begin_k)
 
@@ -172,8 +180,12 @@ def simuleer(scenario: Scenario) -> Resultaat:
     afgetrokken_rente_jaar = 0.0
     werkelijk_rend_jaar_k = 0.0
     werkelijk_rend_jaar_h = 0.0
-    verlies_k = 0.0
-    verlies_h = 0.0
+    maand_spaarrente = (1.0 + scenario.belegging.spaarrente_pct / 100.0) ** (1.0 / 12.0) - 1.0
+    # Fictieve box 3 kijkt naar het vermogen op 1 januari, niet naar 31 december.
+    box3_peildatum_k_beleg = belegging_k.vermogen
+    box3_peildatum_k_cash = cash_k
+    box3_peildatum_h_beleg = belegging_h.vermogen
+    box3_peildatum_h_cash = cash_h
 
     e = scenario.eigenaarskosten
 
@@ -189,10 +201,21 @@ def simuleer(scenario: Scenario) -> Resultaat:
             woz_v *= (1.0 + (w.woz_groei_pct if w.woz_groei_pct is not None
                              else w.waarde_groei_pct) / 100.0)
             infl_accum *= (1.0 + scenario.algemeen.inflatie_pct / 100.0)
+            box3_peildatum_k_beleg = belegging_k.vermogen
+            box3_peildatum_k_cash = cash_k
+            box3_peildatum_h_beleg = belegging_h.vermogen
+            box3_peildatum_h_cash = cash_h
 
         woningwaarde[m] = ww
         woz[m] = woz_v
         inflatie[m] = infl_accum
+
+        spaarrente_k = max(cash_k, 0.0) * maand_spaarrente
+        spaarrente_h = max(cash_h, 0.0) * maand_spaarrente
+        cash_k += spaarrente_k
+        cash_h += spaarrente_h
+        werkelijk_rend_jaar_k += spaarrente_k
+        werkelijk_rend_jaar_h += spaarrente_h
 
         # ---- KOPEN ----
         rente_m, aflossing_m, hra_rente_m = 0.0, 0.0, 0.0
@@ -217,10 +240,12 @@ def simuleer(scenario: Scenario) -> Resultaat:
         erfpacht_m = (e.erfpacht_maand + w.erfpacht_canon_maand) * infl_accum
         overige_m = e.overige_maand * infl_accum
         eigenaar_m = onderhoud_m + ozb_m + vve_m + verzekering_m + lokale_m + erfpacht_m + overige_m
+        afgetrokken_rente_jaar += erfpacht_m  # periodieke canon is aftrekbaar in box 1
 
         vrije_k = scenario.algemeen.maandbudget - hypotheek_m - eigenaar_m
         _k, _d, _kos = belegging_k.draai_maand(vrije_k)
-        werkelijk_rend_jaar_k += _k + _d - _kos
+        cash_k = _dek_tekort_uit_cash(belegging_k, cash_k)
+        werkelijk_rend_jaar_k += _k + _d
 
         # aankoopkosten zijn eenmalig in maand 0 (cash reeds betaald), geen maandpost
         # ---- HUREN ----
@@ -229,33 +254,34 @@ def simuleer(scenario: Scenario) -> Resultaat:
         overige_h_m = scenario.huur.overige_maand * infl_accum
         vrije_h = scenario.algemeen.maandbudget - huur_m - service_m - overige_h_m
         _k, _d, _kos = belegging_h.draai_maand(vrije_h)
-        werkelijk_rend_jaar_h += _k + _d - _kos
+        cash_h = _dek_tekort_uit_cash(belegging_h, cash_h)
+        werkelijk_rend_jaar_h += _k + _d
 
         # ---- jaareinde: belastingen ----
         if is_jaareinde:
             regels = box3_stelsel.voor_jaar(kalenderjaar)
 
             # Box 3 kopen
-            totaal_k = belegging_k.vermogen + cash_k
-            if scenario.fiscaal.box3_werkelijk_rendement:
-                bel, verlies_k = box3_werkelijk_belasting(werkelijk_rend_jaar_k, regels, verlies_k)
-            else:
-                bel = box3_fictief_belasting(totaal_k, cash_k, regels)
+            totaal_k = box3_peildatum_k_beleg + box3_peildatum_k_cash
+            fictief_k = box3_fictief_belasting(totaal_k, box3_peildatum_k_cash, regels)
+            werkelijk_k = box3_werkelijk_belasting(werkelijk_rend_jaar_k, regels)
+            bel = min(fictief_k, werkelijk_k) if scenario.fiscaal.box3_werkelijk_rendement else fictief_k
             belegging_k.betaal_belasting(bel)
+            cash_k = _dek_tekort_uit_cash(belegging_k, cash_k)
             box3_k[m] = bel
 
             # Box 3 huren
-            totaal_h = belegging_h.vermogen + cash_h
-            if scenario.fiscaal.box3_werkelijk_rendement:
-                belh, verlies_h = box3_werkelijk_belasting(werkelijk_rend_jaar_h, regels, verlies_h)
-            else:
-                belh = box3_fictief_belasting(totaal_h, cash_h, regels)
+            totaal_h = box3_peildatum_h_beleg + box3_peildatum_h_cash
+            fictief_h = box3_fictief_belasting(totaal_h, box3_peildatum_h_cash, regels)
+            werkelijk_h = box3_werkelijk_belasting(werkelijk_rend_jaar_h, regels)
+            belh = min(fictief_h, werkelijk_h) if scenario.fiscaal.box3_werkelijk_rendement else fictief_h
             belegging_h.betaal_belasting(belh)
+            cash_h = _dek_tekort_uit_cash(belegging_h, cash_h)
             box3_h[m] = belh
 
             # Box 1 eigen woning: HRA/EWF over dit kalenderjaar
             aftrekbare = afgetrokken_rente_jaar + financ_aftrek_jaar1 if jaar_index == 0 else afgetrokken_rente_jaar
-            hra = hra_ewf_jaarvoordeel(aftrekbare, woz_v, ew)
+            hra = hra_ewf_jaarvoordeel(aftrekbare, woz_v, ew, kalenderjaar)
             belegging_k.stort(hra)  # positief voordeel = bijstorting, negatief = kosten
             hra_voordeel[m] = hra
 
@@ -319,7 +345,7 @@ def break_even_jaar(resultaat: Resultaat, liquide: bool = True) -> float | None:
     indices = resultaat.jaar_indices()
     for i in indices:
         if k[i] >= h[i]:
-            return float(resultaat.jaren[i])
+            return float(resultaat.jaren[i] + 1)
     return None
 
 

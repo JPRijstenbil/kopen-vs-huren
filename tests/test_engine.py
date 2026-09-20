@@ -14,7 +14,13 @@ from simulator.mortgage import (
 )
 from simulator.presets import SCHEMA, format_export, parse_import, waarden_naar_session
 from simulator.scenarios import basis_scenario
-from simulator.tax import Box3Regels, box3_fictief_belasting
+from simulator.tax import (
+    Box3Regels,
+    EigenWoningFiscaal,
+    box3_fictief_belasting,
+    box3_werkelijk_belasting,
+    hra_ewf_jaarvoordeel,
+)
 
 
 def assert_approx(a, b, rel=1e-6):
@@ -78,6 +84,17 @@ def test_annuiteit_loopt_correct_af_tot_nul():
     assert ld.schuld < 1e-6
 
 
+def test_annuiteit_wordt_herberekend_na_rentewijziging_zonder_negatieve_aflossing():
+    ld = Leningdeel(
+        100000.0, 1.0, Aflossingstype.ANNUITAIR, 360,
+        rentevaste_periode_maanden=12, rente_na_rentevast_pct=8.0,
+    )
+    for m in range(24):
+        _rente, aflossing = ld.simulatie_maand(m)
+        assert aflossing >= 0.0
+    assert ld.schuld < 100000.0
+
+
 # ---------------------------------------------------------------------------
 # Beleggingsrekening
 # ---------------------------------------------------------------------------
@@ -114,14 +131,59 @@ def test_box3_verlaagt_portefeuille():
 # ---------------------------------------------------------------------------
 
 def test_box3_fictief_heffingsvrij_aftrek():
-    regels = Box3Regels(2026, None, 36.0, 1.44, 6.27, 57000.0, fiscaal_partner=False)
+    regels = Box3Regels(2026, None, 36.0, 1.28, 6.00, 59357.0, fiscaal_partner=False)
     # vermogen onder heffingsvrij -> geen belasting
     assert box3_fictief_belasting(30000.0, 30000.0, regels) == 0.0
     # boven heffingsvrij -> belasting over forfaitair rendement
     bel = box3_fictief_belasting(100000.0, 40000.0, regels)
-    # belastbaar = 43000; spaar=40000 -> 40000*1.44%, beleg=3000 -> 3000*6.27%
-    rend = 40000 * 0.0144 + 3000 * 0.0627
-    assert_approx(bel, rend * 0.36, rel=1e-9)
+    # Rendement wordt over de werkelijke mix berekend; vrijstelling verlaagt
+    # daarna de grondslag pro rata.
+    rend = 40000 * 0.0128 + 60000 * 0.06
+    aandeel = (100000 - 59357) / 100000
+    assert_approx(bel, rend * aandeel * 0.36, rel=1e-9)
+
+
+def test_box3_werkelijk_geen_verliesverrekening_of_vrijstelling():
+    regels = Box3Regels(2026, None, 36.0, 1.28, 6.00, 59357.0)
+    assert box3_werkelijk_belasting(-1000.0, regels) == 0.0
+    assert_approx(box3_werkelijk_belasting(1000.0, regels), 360.0)
+
+
+def test_ewf_villabelasting_is_marginaal_geen_percentage_over_geheel():
+    f = EigenWoningFiscaal(
+        hra_tarief_pct=37.56,
+        ewf_schijven=[(0.0, 0.35)],
+        ewf_hoge_grens=1_350_000.0,
+        ewf_hoog_pct=2.35,
+        wet_hillen_afbouw_pct=0.71867,
+    )
+    verwacht = 1_350_000 * 0.0035 + 150_000 * 0.0235
+    assert_approx(f.ewf_bedrag(1_500_000), verwacht)
+
+
+def test_ewf_lage_woz_schijven_2026():
+    f = EigenWoningFiscaal(
+        ewf_schijven=[
+            (0.0, 0.0), (12_500.0, 0.10), (25_000.0, 0.20),
+            (50_000.0, 0.25), (75_000.0, 0.35),
+        ]
+    )
+    assert_approx(f.ewf_bedrag(10_000), 0.0)
+    assert_approx(f.ewf_bedrag(20_000), 20.0)
+    assert_approx(f.ewf_bedrag(60_000), 150.0)
+
+
+def test_wet_hillen_bouwt_jaarlijks_af_vanaf_2026():
+    f = EigenWoningFiscaal(
+        hra_tarief_pct=37.56,
+        ewf_schijven=[(0.0, 0.35)],
+        wet_hillen_afbouw_pct=0.71867,
+        wet_hillen_basisjaar=2026,
+        wet_hillen_afbouw_per_jaar=0.048,
+    )
+    voordeel_2026 = hra_ewf_jaarvoordeel(0.0, 400000.0, f, 2026)
+    voordeel_2027 = hra_ewf_jaarvoordeel(0.0, 400000.0, f, 2027)
+    assert voordeel_2027 < voordeel_2026  # minder Hillen-aftrek = meer belasting
 
 
 # ---------------------------------------------------------------------------
@@ -201,13 +263,98 @@ def test_box3_verlaagt_huurportefeuille_jaarlijks():
     assert r_nul.netto_huren[-1] > r_hoog.netto_huren[-1]
 
 
+def test_box3_fictief_gebruikt_peildatum_1_januari():
+    s = basis_scenario()
+    s.algemeen.bestaand_spaargeld = 0.0
+    s.algemeen.bestaand_belegging = 0.0
+    s.algemeen.maandbudget = 10_000.0
+    s.huur.initiele_maandhuur = 0.0
+    s.huur.servicekosten_maand = 0.0
+    r = simuleer(s)
+    # Op 1 januari was er geen box-3-vermogen; stortingen in het jaar tellen
+    # pas mee op de peildatum van het volgende kalenderjaar.
+    assert r.box3_huren[11] == 0.0
+    assert r.box3_huren[23] > 0.0
+
+
+def test_tekort_maandbudget_wordt_niet_gratis_afgekapt():
+    s = basis_scenario()
+    s.algemeen.maandbudget = 0.0
+    r = simuleer(s)
+    # Eerst wordt spaargeld aangesproken; bij langdurig tekort blijft daarna
+    # een negatief saldo zichtbaar in plaats van gratis te verdwijnen.
+    assert r.cash_kopen[-1] == 0.0
+    assert r.cash_huren[-1] == 0.0
+    assert r.belegging_kopen[-1] < 0.0
+    assert r.belegging_huren[-1] < 0.0
+
+
+def test_tekort_wordt_eerst_uit_cash_betaald():
+    s = basis_scenario()
+    s.algemeen.horizon_jaar = 1
+    s.algemeen.bestaand_spaargeld = 100_000.0
+    s.algemeen.bestaand_belegging = 0.0
+    s.algemeen.maandbudget = 0.0
+    s.belegging.spaarrente_pct = 0.0
+    r = simuleer(s)
+    assert r.belegging_huren[-1] == 0.0
+    assert 0.0 < r.cash_huren[-1] < 100_000.0
+
+
+def test_spaargeld_ontvangt_spaarrente():
+    s = basis_scenario()
+    s.algemeen.horizon_jaar = 1
+    s.algemeen.bestaand_spaargeld = 100_000.0
+    s.algemeen.bestaand_belegging = 0.0
+    s.algemeen.maandbudget = 0.0
+    s.huur.initiele_maandhuur = 0.0
+    s.huur.servicekosten_maand = 0.0
+    s.belegging.spaarrente_pct = 2.0
+    for regel in s.fiscaal.box3.regels:
+        regel.tarief_pct = 0.0
+    r = simuleer(s)
+    assert_approx(r.cash_huren[-1], 102_000.0, rel=1e-6)
+
+
+def test_dividend_telt_naast_koersrendement_ook_zonder_aparte_koersconfig():
+    s = basis_scenario(beleg_rendement=0.0)
+    s.algemeen.horizon_jaar = 1
+    s.algemeen.bestaand_spaargeld = 0.0
+    s.algemeen.bestaand_belegging = 100_000.0
+    s.algemeen.maandbudget = 0.0
+    s.huur.initiele_maandhuur = 0.0
+    s.huur.servicekosten_maand = 0.0
+    s.belegging.dividend_pct = 2.0
+    s.belegging.ter_pct = 0.0
+    for regel in s.fiscaal.box3.regels:
+        regel.tarief_pct = 0.0
+    r = simuleer(s)
+    assert_approx(r.belegging_huren[-1], 102_000.0, rel=1e-6)
+
+
+def test_aftrekbare_financieringskosten_zonder_bouwkundige_keuring():
+    s = basis_scenario()
+    s.algemeen.horizon_jaar = 1
+    s.aankoopkosten.fiscaal_aftrekbaar_deel_pct = 100.0
+    r_met = simuleer(s)
+    s.aankoopkosten.bouwkundige_keuring += 10_000.0
+    r_keuring = simuleer(s)
+    # Keuring verlaagt vermogen als kosten, maar verhoogt de Box-1-aftrek niet.
+    assert_approx(r_met.hra_voordeel[11], r_keuring.hra_voordeel[11])
+
+
 def test_beide_scenarios_starten_eerlijk():
     """Eerlijke start: huren houdt het volledige spaargeld als cash, kopen zet
     de eigen inbreng direct om in equity, en het restant is belegd."""
     s = basis_scenario()
     r = simuleer(s)
-    # huren: cash = volledig startspaargeld
-    assert_approx(r.cash_huren[0], s.algemeen.bestaand_spaargeld, rel=1e-9)
+    # huren: cash = volledig startspaargeld plus één maand spaarrente
+    maand_spaar = jaarlijks_naar_maandelijks(s.belegging.spaarrente_pct)
+    assert_approx(
+        r.cash_huren[0],
+        s.algemeen.bestaand_spaargeld * (1 + maand_spaar),
+        rel=1e-9,
+    )
     # kopen: eigen inbreng wordt direct woning-equity
     # (maand 0 heeft al één aflossing gedaan, dus + aflossing[0])
     assert_approx(r.equity[0], s.algemeen.eigen_inbreng + r.aflossing[0], rel=1e-9)

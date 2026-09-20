@@ -95,7 +95,11 @@ class Leningdeel:
         rente = self.schuld * self._current_rente(maand_index)
 
         if self.aflossingstype == Aflossingstype.ANNUITAIR:
-            aflossing = min(self._vast_maandbedrag - rente, self.schuld)
+            resterend = max(self.looptijd_maanden - maand_index, 1)
+            maandbedrag = annuitaire_maandlast(
+                self.schuld, self._current_rente(maand_index), resterend
+            )
+            aflossing = min(max(maandbedrag - rente, 0.0), self.schuld)
         elif self.aflossingstype == Aflossingstype.LINEAIR:
             aflossing = min(self._vaste_aflossing, self.schuld)
         else:  # aflossingsvrij
@@ -110,7 +114,10 @@ class Leningdeel:
     def maandlast(self, maand_index: int) -> float:
         """Totale maandlast (rente + aflossing) in een gegeven maand."""
         if self.aflossingstype == Aflossingstype.ANNUITAIR:
-            return self._vast_maandbedrag
+            resterend = max(self.looptijd_maanden - maand_index, 1)
+            return annuitaire_maandlast(
+                self.schuld, self._current_rente(maand_index), resterend
+            )
         if self.aflossingstype == Aflossingstype.LINEAIR:
             return self._vaste_aflossing + self.schuld * self._current_rente(maand_index)
         # aflossingsvrij

@@ -57,20 +57,17 @@ class Beleggingsrekening:
         zodat een storting van die maand niet direct rendeert.
         """
         begin = self.vermogen
-        koers_winst = begin * self._maand_koers
-        dividend_winst = begin * self._maand_dividend
-        kosten = (begin + koers_winst + dividend_winst) * self._maand_ter
+        renderend = max(begin, 0.0)
+        koers_winst = renderend * self._maand_koers
+        dividend_winst = renderend * self._maand_dividend
+        kosten = (renderend + koers_winst + dividend_winst) * self._maand_ter
         self.vermogen = begin + koers_winst + dividend_winst - kosten + storting
         return koers_winst, dividend_winst, kosten
 
     def stort(self, bedrag: float) -> None:
         """Stort een bedrag bij (of onttrek, indien negatief) zonder rendement."""
         self.vermogen += bedrag
-        if self.vermogen < 0:
-            self.vermogen = 0.0
 
     def betaal_belasting(self, belasting: float) -> None:
         """Trek een belastingheffing (bv. Box 3) af van het vermogen."""
         self.vermogen -= belasting
-        if self.vermogen < 0:
-            self.vermogen = 0.0

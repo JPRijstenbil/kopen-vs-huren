@@ -116,6 +116,7 @@ class BeleggingsConfig:
     koersrendement_pct: float | None = None
     dividend_pct: float = 0.0
     ter_pct: float = 0.3
+    spaarrente_pct: float = 1.5
 
 
 # ---------------------------------------------------------------------------
