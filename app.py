@@ -157,6 +157,48 @@ st.markdown("""
         line-height: 1.5;
         margin: .75rem .15rem 1rem;
     }
+    .kvh-section-head { margin: 1.8rem 0 .8rem; }
+    .kvh-section-kicker {
+        color: var(--kvh-brand); font-size: .73rem; font-weight: 750;
+        letter-spacing: .09em; text-transform: uppercase; margin-bottom: .25rem;
+    }
+    .kvh-section-head h2 {
+        color: var(--kvh-text) !important;
+        font-size: clamp(1.55rem, 3vw, 2.15rem) !important;
+        margin: 0 0 .3rem !important;
+    }
+    .kvh-section-head p {
+        color: var(--kvh-muted); max-width: 780px; line-height: 1.55; margin: 0;
+    }
+    .kvh-how-grid {
+        display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .8rem; margin-bottom: .85rem;
+    }
+    .kvh-step {
+        padding: 1rem; border: 1px solid var(--kvh-border); border-radius: 15px;
+        background: var(--kvh-surface-2); color: var(--kvh-muted);
+        font-size: .88rem; line-height: 1.5;
+    }
+    .kvh-step-num {
+        display: inline-grid; place-items: center; width: 1.65rem; height: 1.65rem;
+        border-radius: 50%; color: #fff; background: var(--kvh-brand);
+        font-weight: 750; font-size: .78rem; margin-bottom: .65rem;
+    }
+    .kvh-step strong {
+        display: block; color: var(--kvh-text); font-size: .95rem; margin-bottom: .2rem;
+    }
+    .kvh-important {
+        padding: 1rem 1.1rem; border-left: 4px solid var(--kvh-brand);
+        border-radius: 0 13px 13px 0; background: var(--kvh-brand-soft);
+        color: var(--kvh-muted); line-height: 1.5; font-size: .9rem;
+    }
+    .kvh-important strong { color: var(--kvh-text); }
+    .kvh-drivers { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .65rem; }
+    .kvh-driver {
+        padding: .28rem .58rem; border: 1px solid var(--kvh-border);
+        border-radius: 999px; background: var(--kvh-surface); color: var(--kvh-text);
+        font-size: .77rem; font-weight: 650;
+    }
     @media (max-width: 640px) {
         .block-container { padding: 3.25rem .75rem 2rem; }
         .kvh-hero { border-radius: 18px; padding: 1.25rem 1.05rem; }
@@ -164,6 +206,10 @@ st.markdown("""
         .kvh-lead { font-size: .98rem; line-height: 1.55; }
         .kvh-principles { grid-template-columns: 1fr; gap: .55rem; margin-top: 1rem; }
         .kvh-principle { padding-top: .65rem; }
+        .kvh-section-head { margin-top: 1.35rem; }
+        .kvh-how-grid { grid-template-columns: 1fr; gap: .55rem; }
+        .kvh-step { padding: .85rem .9rem; }
+        .kvh-important { padding: .85rem .9rem; }
         div[data-testid="stMetric"] { padding: 11px 12px; }
         div[data-testid="stMetricValue"] { font-size: 1.25rem; }
         div[data-testid="stPlotlyChart"] { margin-left: -.5rem; margin-right: -.5rem; }
@@ -216,10 +262,55 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<section aria-labelledby="hoe-werkt-het">
+  <div class="kvh-section-head">
+    <div class="kvh-section-kicker">Zo gebruik je de vergelijking</div>
+    <h2 id="hoe-werkt-het">Hoe werkt het?</h2>
+    <p>De simulator rekent kopen en huren maandelijks naast elkaar door. Niet de
+    laagste woonlast, maar het hoogste netto vermogen na jouw gekozen periode is
+    het eindresultaat.</p>
+  </div>
+  <div class="kvh-how-grid">
+    <div class="kvh-step"><span class="kvh-step-num">1</span>
+      <strong>Vul jouw situatie in</strong>
+      Vervang de voorbeeldwaarden door je koopwoning, hypotheek, huur en beschikbare vermogen.
+    </div>
+    <div class="kvh-step"><span class="kvh-step-num">2</span>
+      <strong>Kies realistische aannames</strong>
+      Stel rente, waardeontwikkeling, huurverhoging en beleggingsrendement voorzichtig in.
+    </div>
+    <div class="kvh-step"><span class="kvh-step-num">3</span>
+      <strong>Lees uitkomst én gevoeligheid</strong>
+      Bekijk netto vermogen, break-even en welke aannames het antwoord kunnen laten omslaan.
+    </div>
+  </div>
+  <div class="kvh-important">
+    <strong>Eigen parameters zijn essentieel.</strong> De standaardwaarden zijn alleen
+    een rekenvoorbeeld. Vooral onderstaande invoer bepaalt de uitkomst; controleer
+    deze daarom voordat je conclusies trekt.
+    <div class="kvh-drivers">
+      <span class="kvh-driver">Koopprijs & hypotheek</span>
+      <span class="kvh-driver">Huurprijs</span>
+      <span class="kvh-driver">Vergelijkingshorizon</span>
+      <span class="kvh-driver">Hypotheekrente</span>
+      <span class="kvh-driver">Woningwaardegroei</span>
+      <span class="kvh-driver">Beleggingsrendement</span>
+      <span class="kvh-driver">Maandbudget & startvermogen</span>
+    </div>
+  </div>
+</section>
+<div class="kvh-section-head">
+  <div class="kvh-section-kicker">Stap 1 · Personaliseer het model</div>
+  <h2>Jouw parameters</h2>
+  <p>Open de invoer en pas minimaal de belangrijkste parameters hierboven aan.</p>
+</div>
+""", unsafe_allow_html=True)
+
 # ===========================================================================
 # PARAMETERS
 # ===========================================================================
-with st.expander("⚙️ Parameters — pas aan naar wens", expanded=False):
+with st.expander("⚙️ Parameters — vul jouw situatie in", expanded=False):
     tab_a, tab_k, tab_h, tab_f, tab_g, tab_p = st.tabs(
         ["Aannames", "Kopen", "Huren", "Beleggen & Fiscaal", "Algemeen", "Profiel"]
     )
@@ -669,7 +760,14 @@ jaar_labels = np.array(
     [scenario.algemeen.start_jaar + i // 12 for i in range(0, len(resultaat.maanden), 12)]
 )
 
-st.caption(f"RESULTAAT NA {p_vergelijk} JAAR")
+st.markdown(f"""
+<div class="kvh-section-head">
+  <div class="kvh-section-kicker">Stap 2 · Uitkomst van jouw scenario</div>
+  <h2>Resultaten na {p_vergelijk} jaar</h2>
+  <p>Vergelijk het opgebouwde netto vermogen en gebruik de analyses eronder om
+  te zien hoe robuust de uitkomst is.</p>
+</div>
+""", unsafe_allow_html=True)
 
 netto_k = resultaat.netto_kopen_liquide[limit - 1] if liquide else resultaat.netto_kopen_bezit[limit - 1]
 netto_h = resultaat.netto_huren[limit - 1]
