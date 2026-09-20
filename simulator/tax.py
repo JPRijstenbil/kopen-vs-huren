@@ -39,6 +39,7 @@ class EigenWoningFiscaal:
       rente onbelast), 0.0 = volledig afgebouwd. Default ~2019-2025 waarde.
     """
     hra_tarief_pct: float = 37.0
+    box1_marginaal_tarief_pct: float = 37.0
     ewf_schijven: list[tuple[float, float]] = field(
         default_factory=lambda: [(0.0, 0.35)]
     )
@@ -86,11 +87,15 @@ def hra_ewf_jaarvoordeel(
     - negatief = netto bijtelling (EWF > rente), gedempt door Wet Hillen.
     """
     ewf = fiscaal.ewf_bedrag(woz_waarde)
-    tarief = fiscaal.hra_tarief_pct / 100.0
-    voordeel = (aftrekbare_rente - ewf) * tarief
+    aftrektarief = fiscaal.hra_tarief_pct / 100.0
+    marginaal_tarief = fiscaal.box1_marginaal_tarief_pct / 100.0
+    voordeel = aftrekbare_rente * aftrektarief - ewf * marginaal_tarief
     if aftrekbare_rente < ewf:
-        # Wet Hillen: de EWF-'rest' boven de rente wordt niet (of deels) belast
-        voordeel += (ewf - aftrekbare_rente) * tarief * fiscaal.wet_hillen_factor(jaar)
+        voordeel += (
+            (ewf - aftrekbare_rente)
+            * marginaal_tarief
+            * fiscaal.wet_hillen_factor(jaar)
+        )
     return voordeel
 
 
@@ -166,7 +171,7 @@ def box3_werkelijk_belasting(
 ) -> float:
     """Belasting onder het werkelijk-rendement-systeem.
 
-    Werkelijk rendement = koerswinst + dividend - kosten over het jaar
+    Werkelijk rendement = koerswinst + dividend over het jaar
     (inclusief ongerealiseerde waardeveranderingen).
 
     Onder de tegenbewijsregeling is er geen heffingsvrij vermogen en geen

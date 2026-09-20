@@ -113,6 +113,13 @@ def simuleer(scenario: Scenario) -> Resultaat:
     # ---- initiële vermogensverdeling (eerlijk: zelfde startvermogen) ----
     w = scenario.woning
     hypotheekbedrag = sum(ld.hoofdsom for ld in scenario.leningdelen)
+    if abs(w.koopprijs - scenario.algemeen.eigen_inbreng - hypotheekbedrag) > 0.01:
+        raise ValueError("Eigen inbreng + hypotheek moet gelijk zijn aan de koopprijs.")
+    if (
+        scenario.aankoopkosten.startersvrijstelling
+        and w.koopprijs > scenario.aankoopkosten.startersvrijstelling_max_waarde
+    ):
+        raise ValueError("Startersvrijstelling is niet geldig boven de woningwaardegrens.")
     aankoopkosten, _trans, _fin = _aankoopkosten_totaal(scenario, hypotheekbedrag)
 
     # Kopen: eigen inbreng + aankoopkosten verlaten het liquide vermogen
@@ -120,6 +127,9 @@ def simuleer(scenario: Scenario) -> Resultaat:
     belegging_k = Beleggingsrekening(0, 0, 0)  # placeholder, wordt gevuld
     begin_k = scenario.algemeen.bestaand_belegging
     uitgaven = scenario.algemeen.eigen_inbreng + aankoopkosten
+    beschikbaar = scenario.algemeen.bestaand_spaargeld + scenario.algemeen.bestaand_belegging
+    if uitgaven > beschikbaar + 0.01:
+        raise ValueError("Onvoldoende startvermogen voor eigen inbreng en aankoopkosten.")
     if uitgaven > cash_k:
         begin_k -= (uitgaven - cash_k)
         cash_k = 0.0
@@ -245,6 +255,8 @@ def simuleer(scenario: Scenario) -> Resultaat:
         vrije_k = scenario.algemeen.maandbudget - hypotheek_m - eigenaar_m
         _k, _d, _kos = belegging_k.draai_maand(vrije_k)
         cash_k = _dek_tekort_uit_cash(belegging_k, cash_k)
+        if belegging_k.vermogen < -0.01:
+            raise ValueError(f"Koopscenario heeft onvoldoende maandbudget in maand {m + 1}.")
         werkelijk_rend_jaar_k += _k + _d
 
         # aankoopkosten zijn eenmalig in maand 0 (cash reeds betaald), geen maandpost
@@ -255,6 +267,8 @@ def simuleer(scenario: Scenario) -> Resultaat:
         vrije_h = scenario.algemeen.maandbudget - huur_m - service_m - overige_h_m
         _k, _d, _kos = belegging_h.draai_maand(vrije_h)
         cash_h = _dek_tekort_uit_cash(belegging_h, cash_h)
+        if belegging_h.vermogen < -0.01:
+            raise ValueError(f"Huurscenario heeft onvoldoende maandbudget in maand {m + 1}.")
         werkelijk_rend_jaar_h += _k + _d
 
         # ---- jaareinde: belastingen ----

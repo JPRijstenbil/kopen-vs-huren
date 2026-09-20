@@ -31,7 +31,8 @@ BOX3_REGELS = Box3Stelsel([
 
 # Eigen woning (Box 1): HRA-tarief, EWF-schijven (WOZ), Wet Hillen-afbouw 2026
 EIGENWONING = EigenWoningFiscaal(
-    hra_tarief_pct=37.0,
+    hra_tarief_pct=37.56,
+    box1_marginaal_tarief_pct=37.56,
     ewf_schijven=[
         (0.0, 0.0), (12_500.0, 0.10), (25_000.0, 0.20),
         (50_000.0, 0.25), (75_000.0, 0.35),

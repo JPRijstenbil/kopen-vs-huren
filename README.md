@@ -72,6 +72,10 @@ tests/test_engine.py
 
 Bronnen: Belastingdienst en NHG; laatst gecontroleerd september 2026.
 
+Voor jaren na 2026 houdt de projectie de laatst bekende fiscale parameters
+constant, behalve de expliciet gemodelleerde verdere afbouw van Wet Hillen.
+Dit is een scenario-aanname, geen voorspelling van toekomstige wetgeving.
+
 ## Modelkeuzes en beperkingen
 
 - **Eén leningdeel** in de UI, maar de engine ondersteunt meerdere (de structuur

@@ -469,6 +469,7 @@ scenario = Scenario(
     fiscaal=FiscaleConfig(
         eigenwoning=EigenWoningFiscaal(
             hra_tarief_pct=p_hra_tarief,
+            box1_marginaal_tarief_pct=p_hra_tarief,
             ewf_schijven=[
                 (0.0, 0.0), (12_500.0, 0.10), (25_000.0, 0.20),
                 (50_000.0, 0.25), (75_000.0, p_ewf),
@@ -503,25 +504,25 @@ scenario = Scenario(
 )
 
 som = p_inbreng + p_hoofdsom
-if abs(som - p_koopprijs) > 500:
-    st.warning(
-        f"⚠️ **Eigen inbreng ({geld(p_inbreng)}) + hoofdsom ({geld(p_hoofdsom)}) = {geld(som)}, "
-        f"maar de koopprijs is {geld(p_koopprijs)}.**\n\n"
-        f"Inbreng + hypotheek moet meestal ≈ koopprijs zijn (inbreng = koopprijs − hypotheek). "
-        f"Alleen bij overwaarde/extra lening klopt een afwijking."
+if abs(som - p_koopprijs) > 0.01:
+    st.error(
+        f"Eigen inbreng ({geld(p_inbreng)}) + hoofdsom ({geld(p_hoofdsom)}) = {geld(som)}, "
+        f"maar de koopprijs is {geld(p_koopprijs)}. Corrigeer de financiering om resultaten te tonen."
     )
+    st.stop()
 
 hypotheekbedrag = sum(ld.hoofdsom for ld in scenario.leningdelen)
 aankoop_indic = p_koopprijs * (0.0 if p_starter else p_odt / 100.0) + p_not_levering + p_not_hyp + p_advies + p_tax + p_keuring + p_makelaar_koop + hypotheekbedrag * p_nhg / 100.0
 start_vermogen = p_spaar + p_beleg_start
 if p_inbreng + aankoop_indic > start_vermogen:
-    st.warning(
-        f"⚠️ Eigen inbreng ({geld(p_inbreng)}) + aankoopkosten (~{geld(aankoop_indic)}) "
-        f"overschrijden je startvermogen ({geld(start_vermogen)}). Het tekort blijft als negatief "
-        f"liquide saldo zichtbaar; verlaag de inbreng of verhoog het startvermogen voor een haalbaar scenario."
+    st.error(
+        f"Eigen inbreng ({geld(p_inbreng)}) + aankoopkosten (~{geld(aankoop_indic)}) "
+        f"overschrijden je startvermogen ({geld(start_vermogen)}). Corrigeer dit om resultaten te tonen."
     )
+    st.stop()
 if p_starter and p_koopprijs > 555_000:
     st.error("Startersvrijstelling 2026 is niet geldig boven een woningwaarde van €555.000.")
+    st.stop()
 if p_hra and afl_type == Aflossingstype.AFLOSSINGSVRIJ:
     st.warning("Een nieuw aflossingsvrij leningdeel geeft normaal geen HRA. Laat dit alleen aan bij overgangsrecht van een bestaande schuld.")
 if p_hra and (p_looptijd > 30 or afl_type == Aflossingstype.AFLOSSINGSVRIJ):
@@ -532,7 +533,11 @@ if p_nhg > 0 and p_koopprijs > 470_000:
 # ===========================================================================
 # Simuleren
 # ===========================================================================
-resultaat = simuleer(scenario)
+try:
+    resultaat = simuleer(scenario)
+except ValueError as exc:
+    st.error(f"Scenario is financieel niet haalbaar: {exc}")
+    st.stop()
 liquide = p_liquide.startswith("Alsof")
 breakeven = break_even_jaar(resultaat, liquide=liquide)
 limit = p_vergelijk * 12
@@ -549,8 +554,16 @@ if p_vandaag:
     factor = inflatie_cum[limit - 1]
     netto_k_v = netto_k / factor
     netto_h_v = netto_h / factor
+    equity_v = resultaat.equity[limit - 1] / factor
+    schuld_v = resultaat.schuld[limit - 1] / factor
+    beleg_k_v = resultaat.belegging_kopen[limit - 1] / factor
+    beleg_h_v = resultaat.belegging_huren[limit - 1] / factor
 else:
     netto_k_v, netto_h_v = netto_k, netto_h
+    equity_v = resultaat.equity[limit - 1]
+    schuld_v = resultaat.schuld[limit - 1]
+    beleg_k_v = resultaat.belegging_kopen[limit - 1]
+    beleg_h_v = resultaat.belegging_huren[limit - 1]
 diff = netto_k_v - netto_h_v
 
 winnaar = "Kopen" if diff > 0 else "Huren" if diff < 0 else "Gelijk"
@@ -561,11 +574,10 @@ kol[1].metric("Netto vermogen · huren", geld(netto_h_v))
 kol[2].metric("Verschil kopen − huren", geld(diff))
 kol2 = st.columns(3)
 kol2[0].metric("Break-even", f"na {breakeven:g} jaar" if breakeven is not None else "niet binnen horizon")
-kol2[1].metric("Woning-equity", geld(resultaat.equity[limit - 1]))
-kol2[2].metric("Resterende hypotheek", geld(resultaat.schuld[limit - 1]))
+kol2[1].metric("Woning-equity", geld(equity_v))
+kol2[2].metric("Resterende hypotheek", geld(schuld_v))
 st.markdown(
-    f"Beleggingen: kopen **{geld(resultaat.belegging_kopen[limit-1])}** · "
-    f"huren **{geld(resultaat.belegging_huren[limit-1])}**."
+    f"Beleggingen: kopen **{geld(beleg_k_v)}** · huren **{geld(beleg_h_v)}**."
     + (" In euro's van vandaag." if p_vandaag else " In nominale euro's.")
 )
 
@@ -573,6 +585,8 @@ fig_hoofd = net_vermogen_figuur(resultaat, jaar_labels, liquide, breakeven, p_ve
 st.plotly_chart(fig_hoofd, width="stretch")
 
 fig_k, fig_h = bestemming_geld_figuur(resultaat, limit)
+if p_vandaag:
+    st.caption("De cumulatieve kasstromen hieronder zijn nominale betaalde bedragen; vermogens-KPI's en de hoofdgrafiek zijn in euro's van vandaag.")
 c1, c2 = st.columns(2)
 with c1:
     st.plotly_chart(fig_k, width="stretch")
@@ -595,7 +609,10 @@ with st.expander("🔀 Scenario-vergelijking (pessimistisch / basis / optimistis
         sc.leningdelen[0].rente_pct = rente
         sc.leningdelen[0].rente_na_rentevast_pct = rente_na
         sc.algemeen.inflatie_pct = inflatie_pct
-        r = simuleer(sc)
+        try:
+            r = simuleer(sc)
+        except ValueError:
+            continue  # variant is met het gekozen budget niet haalbaar
         k = r.netto_kopen_liquide if liquide else r.netto_kopen_bezit
         j = r.jaar_indices()
         diff_v = k[j] - r.netto_huren[j]
@@ -622,11 +639,15 @@ with st.expander("🌀 Sensitiviteit (tornado) — welke aanname telt het meest?
             s2.eigenaarskosten.onderhoud_pct_waarde = overrides["onderhoud"]
         if "inflatie" in overrides:
             s2.algemeen.inflatie_pct = overrides["inflatie"]
-        r = simuleer(s2)
+        try:
+            r = simuleer(s2)
+        except ValueError:
+            return float("nan")
         k = r.netto_kopen_liquide if liquide else r.netto_kopen_bezit
-        return float(k[limit - 1] - r.netto_huren[limit - 1])
+        waarde = float(k[limit - 1] - r.netto_huren[limit - 1])
+        return waarde / r.inflatie[limit - 1] if p_vandaag else waarde
 
-    basis_diff = float(netto_k - netto_h)
+    basis_diff = float(diff)
     span = 0.2
     tornado = {}
     for label, (key, base) in {
@@ -652,9 +673,13 @@ with st.expander("🗺️ Heatmap — onder welke aannames wint kopen?", expande
             s2 = copy.deepcopy(scenario)
             s2.belegging.bruto_rendement_pct = float(xv)
             s2.woning.waarde_groei_pct = float(yv)
-            r = simuleer(s2)
-            k = r.netto_kopen_liquide if liquide else r.netto_kopen_bezit
-            z[i, j] = k[limit - 1] - r.netto_huren[limit - 1]
+            try:
+                r = simuleer(s2)
+                k = r.netto_kopen_liquide if liquide else r.netto_kopen_bezit
+                waarde = k[limit - 1] - r.netto_huren[limit - 1]
+                z[i, j] = waarde / r.inflatie[limit - 1] if p_vandaag else waarde
+            except ValueError:
+                z[i, j] = np.nan
     fig_hmap = heatmap_figuur(x_vals, y_vals, z)
     st.plotly_chart(fig_hmap, width="stretch")
     st.caption(f"Rood = huren gunstiger, groen = kopen gunstiger. De zwarte lijn is het break-even-punt na {p_vergelijk} jaar.")

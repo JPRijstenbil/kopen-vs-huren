@@ -27,6 +27,28 @@ def assert_approx(a, b, rel=1e-6):
     assert abs(a - b) <= rel * max(1.0, abs(b)), f"{a} != {b} (rel {rel})"
 
 
+def maak_aankoopkosten_nul(s):
+    """Testhelper: verwijder aankoopkosten voor geïsoleerde rekenrelaties."""
+    a = s.aankoopkosten
+    a.startersvrijstelling = True
+    a.notaris_levering = a.notaris_hypotheek = 0.0
+    a.hypotheekadvies = a.taxatie = a.bouwkundige_keuring = 0.0
+    a.aankoopmakelaar = a.nhg_premie_pct = a.overige = 0.0
+
+
+def neutraliseer_koopscenario(s):
+    """Maak kopen kostenloos wanneer een test uitsluitend huren/beleggen raakt."""
+    s.woning.koopprijs = 0.0
+    s.woning.initiele_woz = 0.0
+    s.algemeen.eigen_inbreng = 0.0
+    s.leningdelen[0].hoofdsom = 0.0
+    e = s.eigenaarskosten
+    e.onderhoud_pct_waarde = e.ozb_pct_woz = 0.0
+    e.vve_maand = e.lokale_heffingen_jaar = 0.0
+    e.opstalverzekering_maand = e.erfpacht_maand = e.overige_maand = 0.0
+    maak_aankoopkosten_nul(s)
+
+
 # ---------------------------------------------------------------------------
 # Hypotheekkern
 # ---------------------------------------------------------------------------
@@ -186,6 +208,17 @@ def test_wet_hillen_bouwt_jaarlijks_af_vanaf_2026():
     assert voordeel_2027 < voordeel_2026  # minder Hillen-aftrek = meer belasting
 
 
+def test_hra_aftrektarief_en_ewf_marginaal_tarief_zijn_gescheiden():
+    f = EigenWoningFiscaal(
+        hra_tarief_pct=37.56,
+        box1_marginaal_tarief_pct=49.50,
+        ewf_schijven=[(0.0, 0.35)],
+        wet_hillen_afbouw_pct=0.0,
+    )
+    verwacht = 10_000 * 0.3756 - (400_000 * 0.0035) * 0.495
+    assert_approx(hra_ewf_jaarvoordeel(10_000, 400_000, f, 2026), verwacht)
+
+
 # ---------------------------------------------------------------------------
 # Integratietests (engine)
 # ---------------------------------------------------------------------------
@@ -265,6 +298,9 @@ def test_box3_verlaagt_huurportefeuille_jaarlijks():
 
 def test_box3_fictief_gebruikt_peildatum_1_januari():
     s = basis_scenario()
+    s.algemeen.eigen_inbreng = 0.0
+    s.leningdelen[0].hoofdsom = s.woning.koopprijs
+    maak_aankoopkosten_nul(s)
     s.algemeen.bestaand_spaargeld = 0.0
     s.algemeen.bestaand_belegging = 0.0
     s.algemeen.maandbudget = 10_000.0
@@ -277,16 +313,11 @@ def test_box3_fictief_gebruikt_peildatum_1_januari():
     assert r.box3_huren[23] > 0.0
 
 
-def test_tekort_maandbudget_wordt_niet_gratis_afgekapt():
+def test_tekort_maandbudget_blokkeert_simulatie():
     s = basis_scenario()
     s.algemeen.maandbudget = 0.0
-    r = simuleer(s)
-    # Eerst wordt spaargeld aangesproken; bij langdurig tekort blijft daarna
-    # een negatief saldo zichtbaar in plaats van gratis te verdwijnen.
-    assert r.cash_kopen[-1] == 0.0
-    assert r.cash_huren[-1] == 0.0
-    assert r.belegging_kopen[-1] < 0.0
-    assert r.belegging_huren[-1] < 0.0
+    with pytest.raises(ValueError, match="onvoldoende maandbudget"):
+        simuleer(s)
 
 
 def test_tekort_wordt_eerst_uit_cash_betaald():
@@ -296,9 +327,34 @@ def test_tekort_wordt_eerst_uit_cash_betaald():
     s.algemeen.bestaand_belegging = 0.0
     s.algemeen.maandbudget = 0.0
     s.belegging.spaarrente_pct = 0.0
+    neutraliseer_koopscenario(s)
     r = simuleer(s)
     assert r.belegging_huren[-1] == 0.0
     assert 0.0 < r.cash_huren[-1] < 100_000.0
+
+
+def test_onvoldoende_startvermogen_blokkeert_simulatie():
+    s = basis_scenario()
+    s.algemeen.bestaand_spaargeld = 0.0
+    s.algemeen.bestaand_belegging = 0.0
+    with pytest.raises(ValueError, match="Onvoldoende startvermogen"):
+        simuleer(s)
+
+
+def test_financieringsidentiteit_is_verplicht():
+    s = basis_scenario()
+    s.algemeen.eigen_inbreng = 0.0
+    with pytest.raises(ValueError, match="gelijk zijn aan de koopprijs"):
+        simuleer(s)
+
+
+def test_ongeldige_startersvrijstelling_blokkeert_simulatie():
+    s = basis_scenario()
+    s.woning.koopprijs = 600_000.0
+    s.algemeen.eigen_inbreng = 250_000.0
+    s.aankoopkosten.startersvrijstelling = True
+    with pytest.raises(ValueError, match="Startersvrijstelling"):
+        simuleer(s)
 
 
 def test_spaargeld_ontvangt_spaarrente():
@@ -310,6 +366,7 @@ def test_spaargeld_ontvangt_spaarrente():
     s.huur.initiele_maandhuur = 0.0
     s.huur.servicekosten_maand = 0.0
     s.belegging.spaarrente_pct = 2.0
+    neutraliseer_koopscenario(s)
     for regel in s.fiscaal.box3.regels:
         regel.tarief_pct = 0.0
     r = simuleer(s)
@@ -326,6 +383,7 @@ def test_dividend_telt_naast_koersrendement_ook_zonder_aparte_koersconfig():
     s.huur.servicekosten_maand = 0.0
     s.belegging.dividend_pct = 2.0
     s.belegging.ter_pct = 0.0
+    neutraliseer_koopscenario(s)
     for regel in s.fiscaal.box3.regels:
         regel.tarief_pct = 0.0
     r = simuleer(s)

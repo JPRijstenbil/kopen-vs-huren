@@ -48,6 +48,7 @@ class Aankoopkosten:
     """
     overdrachtsbelasting_pct: float = 2.0
     startersvrijstelling: bool = False
+    startersvrijstelling_max_waarde: float = 555000.0
     notaris_levering: float = 750.0
     notaris_hypotheek: float = 500.0
     hypotheekadvies: float = 2000.0
